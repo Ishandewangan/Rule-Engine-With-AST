@@ -1,2 +1,2 @@
-Flask
-SQLAlchemy
+Flask==2.1.1
+
