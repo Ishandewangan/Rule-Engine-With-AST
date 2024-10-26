@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rule Engine</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@10"></script>
+</head>
+<body>
+<div class="container">
+    <h1 class="mt-4">Rule Engine</h1>
+
+    <!-- Create Rule Form -->
+    <form id="ruleForm" class="mb-4">
+        <div class="form-group">
+            <label for="ruleString">Rule String:</label>
+            <input type="text" class="form-control" id="ruleString" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Create Rule</button>
+    </form>
+
+    <div id="responseMessage"></div> <!-- To display success/error messages -->
+
+    <h2>Existing Rules</h2>
+    <ul id="rulesList" class="list-group">
+        {% for rule_id, rule_string in rules.items() %}
+        <li class="list-group-item" data-id="{{ rule_id }}">
+            {{ rule_string }}
+            <button class="btn btn-danger btn-sm float-right delete-btn">Delete</button>
+            <button class="btn btn-warning btn-sm float-right edit-btn" style="margin-right: 5px;">Edit</button>
+        </li>
+        {% endfor %}
+    </ul>
+
+    <h2>Combine Rules</h2>
+<form id="combineForm">
+    <div class="form-group">
+        <label for="ruleIds">Select Rules to Combine:</label>
+        <select class="form-control" id="ruleIds" multiple required>
+            {% for rule_id in rules.keys() %}
+            <option value="{{ rule_id }}">Rule {{ rule_id }}</option>
+            {% endfor %}
+        </select>
+        <small class="form-text text-muted">
+            Hold down the Ctrl (Windows) or Command (Mac) button to select multiple rules.
+        </small>
+    </div>
+    <div class="form-group">
+        <label>Combine using:</label><br>
+        <label class="radio-inline"><input type="radio" name="combineType" value="AND" checked> AND</label>
+        <label class="radio-inline"><input type="radio" name="combineType" value="OR"> OR</label>
+    </div>
+    <button type="submit" class="btn btn-success">Combine Rules</button>
+</form>
+
+
+    <h2>Evaluate Rule</h2>
+    <form id="evaluateForm">
+        <div class="form-group">
+            <label for="ruleId">Select Rule:</label>
+            <select class="form-control" id="ruleId" required>
+                <option value="">Select Rule</option>
+                {% for rule_id in rules.keys() %}
+                <option value="{{ rule_id }}">Rule {{ rule_id }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="dataInput">Data (JSON format):</label>
+            <textarea class="form-control" id="dataInput" rows="3" required></textarea>
+        </div>
+        <button type="submit" class="btn btn-info">Evaluate Rule</button>
+    </form>
+</div>
+
+<script>
+$(document).ready(function() {
+    $("#ruleForm").on("submit", function(event) {
+        event.preventDefault();
+        const ruleString = $("#ruleString").val();
+        $.ajax({
+            url: "/api/rules",
+            method: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({ rule_string: ruleString }),
+            success: function(response) {
+                Swal.fire("Success", response.message, "success").then(() => location.reload());
+            },
+            error: function(xhr) {
+                Swal.fire("Error", xhr.responseJSON.error, "error");
+            }
+        });
+    });
+
+    $("#combineForm").on("submit", function(event) {
+        event.preventDefault();
+        const ruleIds = $("#ruleIds").val();
+        const combineType = $("input[name='combineType']:checked").val();
+        $.ajax({
+            url: "/api/combine",
+            method: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({ rule_ids: ruleIds, combine_type: combineType }),
+            success: function(response) {
+                Swal.fire("Success", response.message, "success").then(() => location.reload());
+            },
+            error: function(xhr) {
+                Swal.fire("Error", xhr.responseJSON.error, "error");
+            }
+        });
+    });
+
+    $("#evaluateForm").on("submit", function(event) {
+        event.preventDefault();
+        const ruleId = $("#ruleId").val();
+        const dataInput = $("#dataInput").val();
+        try {
+            const data = JSON.parse(dataInput);
+            $.ajax({
+                url: "/api/evaluate",
+                method: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({ rule_id: ruleId, data: data }),
+                success: function(response) {
+                    Swal.fire("Result", "Evaluation Result: " + response.result, "info");
+                },
+                error: function(xhr) {
+                    Swal.fire("Error", xhr.responseJSON.error, "error");
+                }
+            });
+        } catch (error) {
+            Swal.fire("Error", "Invalid JSON format.", "error");
+        }
+    });
+
+    $(document).on("click", ".delete-btn", function() {
+        const ruleId = $(this).closest("li").data("id");
+        $.ajax({
+            url: "/api/rules/" + ruleId,
+            method: "DELETE",
+            success: function(response) {
+                Swal.fire("Success", response.message, "success").then(() => location.reload());
+            },
+            error: function(xhr) {
+                Swal.fire("Error", xhr.responseJSON.error, "error");
+            }
+        });
+    });
+
+    $(document).on("click", ".edit-btn", function() {
+        const ruleId = $(this).closest("li").data("id");
+        const ruleString = $(this).closest("li").text().trim().replace("EditDelete", "").trim(); // Get the rule string
+
+        Swal.fire({
+            title: 'Edit Rule',
+            input: 'text',
+            inputValue: ruleString,
+            showCancelButton: true,
+            confirmButtonText: 'Save',
+            cancelButtonText: 'Cancel',
+            preConfirm: (newRuleString) => {
+                return new Promise((resolve) => {
+                    $.ajax({
+                        url: `/api/rules/${ruleId}`,
+                        method: "PUT",
+                        contentType: "application/json",
+                        data: JSON.stringify({ rule_string: newRuleString }),
+                        success: function(response) {
+                            resolve();
+                            Swal.fire("Success", response.message, "success").then(() => location.reload());
+                        },
+                        error: function(xhr) {
+                            resolve();
+                            Swal.fire("Error", xhr.responseJSON.error, "error");
+                        }
+                    });
+                });
+            }
+        });
+    });
+});
+</script>
+
+</body>
+</html>
