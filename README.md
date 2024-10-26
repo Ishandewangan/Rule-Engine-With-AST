@@ -27,7 +27,7 @@ A simple web-based rule engine using Flask and AST (Abstract Syntax Tree) for cr
      ```bash
      pip install -r requirements.txt
 
-  4. **Install Dependencies**:
+  4. **Run the Application**:
      ```bash
      python app.py
 
